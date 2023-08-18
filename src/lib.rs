@@ -7,7 +7,7 @@ use swc_core::ecma::ast::{
     EsVersion, ImportDefaultSpecifier, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue,
     JSXExpr, JSXExprContainer, JSXOpeningElement, MemberExpr, MemberProp, Str,
 };
-use swc_core::ecma::parser::{EsConfig, Syntax, TsConfig};
+use swc_core::ecma::parser::{Syntax, TsConfig};
 use swc_core::{
     common::DUMMY_SP,
     ecma::{
