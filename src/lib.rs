@@ -4,11 +4,10 @@ use std::sync::Arc;
 use swc_core::common::errors::{ColorConfig, Handler};
 use swc_core::common::{FileName, SourceMap, GLOBALS};
 use swc_core::ecma::ast::{
-    EsVersion, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue, JSXExpr, JSXExprContainer,
-    JSXOpeningElement, MemberExpr, MemberProp, Str,
+    EsVersion, ImportDefaultSpecifier, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue,
+    JSXExpr, JSXExprContainer, JSXOpeningElement, MemberExpr, MemberProp, Str,
 };
-use swc_core::ecma::parser::{EsConfig, Syntax};
-use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
+use swc_core::ecma::parser::{EsConfig, Syntax, TsConfig};
 use swc_core::{
     common::DUMMY_SP,
     ecma::{
@@ -16,7 +15,7 @@ use swc_core::{
             ArrowExpr, BindingIdent, BlockStmt, BlockStmtOrExpr, CallExpr, Callee, Decl, Expr,
             ExprOrSpread, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, JSXElement,
             JSXElementChild, JSXElementName, Module, ModuleDecl, ModuleExportName, ModuleItem, Pat,
-            Program, ReturnStmt, Stmt, VarDecl, VarDeclKind, VarDeclarator,
+            ReturnStmt, Stmt, VarDecl, VarDeclKind, VarDeclarator,
         },
         utils::prepend_stmt,
         visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
@@ -26,7 +25,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 pub struct TransformVisitor {
     elements: Vec<Box<JSXElement>>,
-    imports: HashMap<String, (Ident, String)>,
+    imports: HashMap<String, (Ident, String, bool)>,
 }
 impl Default for TransformVisitor {
     fn default() -> Self {
@@ -41,16 +40,32 @@ impl TransformVisitor {
     pub fn insert_imports(&mut self, module: &mut Module) {
         let mut entries = self.imports.drain().collect::<Vec<_>>();
         entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-        for (name, (val, from)) in entries {
+        for (name, (val, from, default)) in entries {
             prepend_stmt(
                 &mut module.body,
                 ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
-                    specifiers: vec![ImportSpecifier::Named(ImportNamedSpecifier {
-                        local: val,
-                        imported: Some(ModuleExportName::Ident(Ident::new(name.into(), DUMMY_SP))),
-                        span: DUMMY_SP,
-                        is_type_only: false,
-                    })],
+                    specifiers: vec![{
+                        if default {
+                            ImportSpecifier::Default(ImportDefaultSpecifier {
+                                span: DUMMY_SP,
+                                local: Ident {
+                                    span: DUMMY_SP,
+                                    sym: name.into(),
+                                    optional: false,
+                                },
+                            })
+                        } else {
+                            ImportSpecifier::Named(ImportNamedSpecifier {
+                                local: val,
+                                imported: Some(ModuleExportName::Ident(Ident::new(
+                                    name.into(),
+                                    DUMMY_SP,
+                                ))),
+                                span: DUMMY_SP,
+                                is_type_only: false,
+                            })
+                        }
+                    }],
                     src: Box::new(Str {
                         span: DUMMY_SP,
                         value: from.into(),
@@ -96,6 +111,7 @@ impl TransformVisitor {
                                         sym: "server$".into(),
                                     },
                                     "solid-start/server".into(),
+                                    true,
                                 ),
                             );
                             "server$".into()
@@ -129,6 +145,7 @@ impl TransformVisitor {
                                                             sym: "createOpenGraphImage$".into(),
                                                         },
                                                         "@solid-mediakit/open-graph".into(),
+                                                        false,
                                                     ),
                                                 );
                                                 "createOpenGraphImage$".into()
@@ -160,6 +177,7 @@ impl VisitMut for TransformVisitor {
     // A comprehensive list of possible visitor methods can be found here:
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
     fn visit_mut_jsx_element(&mut self, n: &mut JSXElement) {
+        n.visit_mut_children_with(self);
         if let JSXElementName::Ident(i) = &n.opening.name {
             if i.sym.to_string() == "OpenGraph" {
                 // Only grab first child that is an element for now
@@ -200,7 +218,7 @@ impl VisitMut for TransformVisitor {
                                     prop: MemberProp::Ident(Ident {
                                         span: DUMMY_SP,
                                         optional: false,
-                                        sym: "src".into(),
+                                        sym: "url".into(),
                                     }),
                                 }))),
                             })),
@@ -219,10 +237,6 @@ impl VisitMut for TransformVisitor {
     }
 }
 
-// #[plugin_transform]
-// pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
-//     program.fold_with(&mut as_folder(TransformVisitor::default()))
-// }
 #[wasm_bindgen]
 pub fn main(code: String, id: String) -> String {
     let cm: Arc<SourceMap> = Arc::<SourceMap>::default();
@@ -236,20 +250,22 @@ pub fn main(code: String, id: String) -> String {
             fm,
             &handler,
             EsVersion::EsNext,
-            Syntax::Es(EsConfig {
-                jsx: true,
-                ..Default::default()
-            }),
+            Syntax::Typescript(TsConfig {
+                tsx: true,
+                decorators: false,
+                dts: false,
+                no_early_errors: false,
+                disallow_ambiguous_jsx_like: true,
+              }),
             swc::config::IsModule::Bool(true),
             None,
         );
-
-        // let inter = result
-        //     .unwrap()
-        //     .fold_with(&mut as_folder(TransformVisitor::default()));
+        let inter = result
+            .unwrap()
+            .fold_with(&mut as_folder(TransformVisitor::default()));
 
         let out = compiler.print(
-            &result.unwrap(),
+            &inter,
             None,
             None,
             false,

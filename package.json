@@ -1,14 +1,20 @@
 {
-    "name": "opengraph_transform",
-    "version": "0.1.0",
-    "description": "",
-    "author": "",
-    "license": "ISC",
-    "keywords": ["swc-plugin"],
-    "main": "target/wasm32-wasi/release/opengraph_transform.wasm",
-    "scripts": {
-        "prepublishOnly": "cargo build-wasi --release"
-    },
-    "files": [],
-    "preferUnplugged": true
+	"name": "opengraph_transform",
+	"version": "0.1.0",
+	"description": "",
+	"author": "",
+	"license": "ISC",
+	"keywords": [
+		"swc-plugin"
+	],
+	"main": "target/wasm32-wasi/release/opengraph_transform.wasm",
+	"scripts": {
+		"build": "wasm-pack build --target web --release && jiti ./scripts/postBuild.ts"
+	},
+	"files": [],
+	"preferUnplugged": true,
+	"devDependencies": {
+		"@types/node": "^20.5.0",
+		"jiti": "^1.19.1"
+	}
 }

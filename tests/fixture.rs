@@ -1,6 +1,7 @@
+use std::fs;
 use std::path::PathBuf;
 
-use opengraph_transform::TransformVisitor;
+use opengraph_transform::{main, TransformVisitor};
 use swc_core::common::{chain, Mark};
 use swc_core::{
     ecma::parser::{EsConfig, Syntax},
@@ -16,9 +17,11 @@ fn syntax() -> Syntax {
         ..Default::default()
     })
 }
-
+fn remove_whitespace(s: &mut String) {
+    s.retain(|c| !c.is_ascii_whitespace())
+}
 #[fixture("tests/fixture/**/code.jsx")]
-fn jsx_dom_expressions_fixture_babel(input: PathBuf) {
+fn tranform_works(input: PathBuf) {
     let output = input.parent().unwrap().join("output.jsx");
 
     test_fixture(
@@ -34,9 +37,13 @@ fn jsx_dom_expressions_fixture_babel(input: PathBuf) {
         Default::default(),
     );
 }
-
-#[test]
-fn yes() {
-    opengraph_transform::main("asd".into(), "file.tsx".into());
-    assert_eq!(true, false);
+#[fixture("tests/fixture/typescript/**/code.tsx")]
+fn typescript(input: PathBuf) {
+    let output = input.parent().unwrap().join("output.tsx");
+    let in_contents = fs::read_to_string(input).unwrap();
+    let mut out_contents = fs::read_to_string(output).unwrap();
+    let mut result = main(in_contents, "code.tsx".into());
+    remove_whitespace(&mut result);
+    remove_whitespace(&mut out_contents);
+    assert_eq!(result, out_contents);
 }

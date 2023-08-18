@@ -7,10 +7,10 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [profile.release]
-# lto = true
-# strip = "symbols"
-# opt-level = "z"
-# codegen-units = 1
+lto = true
+strip = "symbols"
+opt-level = "z"
+codegen-units = 1
 
 [dependencies]
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
